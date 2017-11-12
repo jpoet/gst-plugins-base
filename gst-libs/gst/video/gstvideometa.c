@@ -989,3 +989,102 @@ gst_buffer_add_video_time_code_meta_full (GstBuffer * buffer, guint fps_n,
 
   return meta;
 }
+
+/* MPEG User Data Meta implementation ****************************************/
+
+GType
+gst_mpeg_user_data_meta_api_get_type (void)
+{
+  static volatile GType type;
+  static const gchar *tags[] = { NULL };
+
+  if (g_once_init_enter (&type)) {
+    GType _type = gst_meta_api_type_register ("GstMPEGUserDataMetaAPI", tags);
+    g_once_init_leave (&type, _type);
+  }
+  return type;
+}
+
+static gboolean
+gst_mpeg_user_data_meta_init (GstMeta * meta, gpointer params, GstBuffer * buffer)
+{
+  GstMPEGUserDataMeta *umeta = (GstMPEGUserDataMeta *) meta;
+
+  umeta->user_data_identifier = 0;
+  umeta->user_data_type_code  = 0;
+  umeta->data = NULL;
+  return TRUE;
+}
+
+static gboolean
+gst_mpeg_user_data_meta_transform (GstBuffer * dest, GstMeta * meta,
+    GstBuffer * buffer, GQuark type, gpointer data)
+{
+  /*
+     Just copy for all transform types
+   */
+
+  GstMPEGUserDataMeta *dmeta =
+      (GstMPEGUserDataMeta *) gst_buffer_add_meta
+    (dest, GST_MPEG_USER_DATA_META_INFO, NULL);
+  GstMPEGUserDataMeta *smeta = (GstMPEGUserDataMeta *) meta;
+
+  if (!dmeta)
+    return FALSE;
+
+  GST_DEBUG ("copy MPEG User Data metadata");
+  dmeta->user_data_identifier = smeta->user_data_identifier;
+  dmeta->user_data_type_code  = smeta->user_data_type_code;
+  g_bytes_ref (smeta->data);
+  dmeta->data = smeta->data;
+
+  return TRUE;
+}
+
+static void
+gst_mpeg_user_data_meta_free (GstMeta * meta, GstBuffer * buffer)
+{
+  GstMPEGUserDataMeta *umeta = (GstMPEGUserDataMeta *) meta;
+
+  g_bytes_unref (umeta->data);
+}
+
+
+const GstMetaInfo *
+gst_mpeg_user_data_meta_get_info (void)
+{
+  static const GstMetaInfo *meta_info = NULL;
+
+  if (g_once_init_enter (&meta_info)) {
+    const GstMetaInfo *mi = gst_meta_register (GST_MPEG_USER_DATA_META_API_TYPE,
+        "GstMPEGUserDataMeta",
+        sizeof (GstMPEGUserDataMeta),
+        gst_mpeg_user_data_meta_init,
+        gst_mpeg_user_data_meta_free,
+        gst_mpeg_user_data_meta_transform);
+    g_once_init_leave (&meta_info, mi);
+  }
+  return meta_info;
+}
+
+GstMPEGUserDataMeta *
+  gst_buffer_add_mpeg_user_data_meta (GstBuffer * buffer,
+				      GstVideoUserDataIdentifier identifier,
+				      GstVideoUserDataType type,
+				      const guint8 * data,
+				      gsize size)
+{
+  GstMPEGUserDataMeta *umeta;
+
+  g_return_val_if_fail (GST_IS_BUFFER (buffer), NULL);
+
+  umeta =
+      (GstMPEGUserDataMeta *) gst_buffer_add_meta
+    (buffer, GST_MPEG_USER_DATA_META_INFO, NULL);
+
+  umeta->user_data_identifier = (guint32)identifier;
+  umeta->user_data_type_code  = (guint8)type;
+  umeta->data = g_bytes_new (data, size * sizeof (guint8));
+
+  return umeta;
+}

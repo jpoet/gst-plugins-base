@@ -284,13 +284,13 @@ const GstMetaInfo *gst_video_region_of_interest_meta_get_info (void);
 GstVideoRegionOfInterestMeta *gst_buffer_get_video_region_of_interest_meta_id (GstBuffer   * buffer,
                                                                                gint          id);
 GstVideoRegionOfInterestMeta *gst_buffer_add_video_region_of_interest_meta    (GstBuffer   * buffer,
-									       const gchar * roi_type,
-									       guint         x,
+                                                                               const gchar * roi_type,
+                                                                               guint         x,
                                                                                guint         y,
                                                                                guint         w,
                                                                                guint         h);
-GstVideoRegionOfInterestMeta *gst_buffer_add_video_region_of_interest_meta_id (GstBuffer   * buffer, 
-									       GQuark        roi_type,
+GstVideoRegionOfInterestMeta *gst_buffer_add_video_region_of_interest_meta_id (GstBuffer   * buffer,
+                                                                               GQuark        roi_type,
                                                                                guint         x,
                                                                                guint         y,
                                                                                guint         w,
@@ -335,6 +335,132 @@ gst_buffer_add_video_time_code_meta_full                     (GstBuffer         
                                                               guint                   seconds,
                                                               guint                   frames,
                                                               guint                   field_count);
+
+
+/**
+ * GstMPEGUserDataMeta:
+ * @meta: parent #GstMeta
+ * @user_data_identifier 32 bit code
+ * @user_data_type_code   8-bit value
+ * @data: guint8 Data
+ *
+ * buffer metadata describing the User data of the frame.
+ *
+ * bslbf -- Bit string, left bit first, where “left” is the order in
+ * which bit strings are written in the Standard. Bit strings are
+ * written as a string of 1s and 0s within single quote marks,
+ * e.g. ‘1000 0001’. Blanks within a bit string are for ease of
+ * reading and have no significance
+ *
+ * uimsbf -- Unsigned integer, most significant bit first.
+ *
+ * Extra user_data_identify:
+ *     0x47413934 (“GA94”) ATSC_user_data() or bar_data()
+ *     0x44544731 (“DTG1”) afd_data()
+ *
+ * MPEG_cc_data() {
+ *     type_code    (8 bits) '0x03'
+ *     cc_data()
+ *     marker_bits  (8 bits) ‘1111 1111’
+ * }
+ *
+ * cc_data() {
+ *     reserved (1 bits) ’1’
+ *     process_cc_data_flag  (1 bits) bslbf
+ *     additional_data_flag  (1 bits) bslbf
+ *     cc_count              (5 bits) uimsbf
+ *     reserved              (8 bits) ‘1111 1111’
+ *     for (i=0 ; i < cc_count ; ++i) {
+ *         marker_bits (5 bits) ‘1111 1’
+ *         cc_valid    (1 bits) bslbf
+ *         cc_type     (2 bits) bslbf
+ *         cc_data_1   (8 bits) bslbf
+ *         cc_data_2   (8 bits) bslbf
+ *     }
+ *     marker_bits     (8 bits) ‘1111 1111’
+ *     if (additional_data_flag) {
+ *         while (nextbits() != ‘0000 0000 0000 0000 0000 0001’) {
+ *             additional_cc_data
+ *         }
+ *     }
+ * }
+ *
+ * bar_data() {
+ *     type_code        (8 bits) '0x06'
+ *     top_bar_flag     (1 bits) bslbf
+ *     bottom_bar_flag  (1 bits) bslbf
+ *     left_bar_flag    (1 bits) bslbf
+ *     right_bar_flag   (1 bits) bslbf
+ *     reserved         (4 bits) ‘1111’
+ *     if (top_bar_flag == ‘1’) {
+ *         one_bits                    (2 bits) ‘11’
+ *         line_number_end_of_top_bar (14 bits) uimsbf
+ *     }
+ *     if (bottom_bar_flag == ‘1’) {
+ *         one_bits                         (2 bits) '11’
+ *         line_number_start_of_bottom_bar (14 bits) uimsbf
+ *     }
+ *     if (left_bar_flag == ‘1’) {
+ *         one_bits                      (2 bits) ‘11’
+ *         pixel_number_end_of_left_bar (14 bits) uimsbf
+ *     }
+ *     if (right_bar_flag == ‘1’) {
+ *         one_bits                         (2 bits) ‘11’
+ *         pixel_number_start_of_right_bar (14 bits) uimsbf
+ *     }
+ * }
+ *
+ * afd_data() {
+ *     zero                (1 bits) ’0’
+ *     active_format_flag  (1 bits) bslbf
+ *     reserved            (6 bits)  ‘00 0001’
+ *     if (active_format_flag == ‘1’) {
+ *         reserved        (4 bits) ‘1111’
+ *         active_format   (4 bits) bslbf
+ *     }
+ * }
+ *
+ */
+
+typedef enum
+{
+  GST_VIDEO_USER_DATA_IDENTIFIER_DESCRIPTORS,
+  GST_VIDEO_USER_DATA_IDENTIFIER_ATSC,
+  GST_VIDEO_USER_DATA_IDENTIFIER_AFD
+} GstVideoUserDataIdentifier;
+
+typedef enum
+{
+  GST_VIDEO_USER_DATA_TYPE_UNDEFINED,
+  GST_VIDEO_USER_DATA_TYPE_CC,
+  GST_VIDEO_USER_DATA_TYPE_BAR
+} GstVideoUserDataType;
+
+typedef struct {
+  GstMeta          meta;
+  guint            user_data_identifier;
+  guint            user_data_type_code;
+  GBytes          *data;
+} GstMPEGUserDataMeta;
+
+GType gst_mpeg_user_data_meta_api_get_type (void);
+#define GST_MPEG_USER_DATA_META_API_TYPE (gst_mpeg_user_data_meta_api_get_type())
+
+const GstMetaInfo *gst_mpeg_user_data_meta_get_info (void);
+#define GST_MPEG_USER_DATA_META_INFO (gst_mpeg_user_data_meta_get_info ())
+
+/**
+ * gst_buffer_add_caption_meta
+ * @buffer: buffer to add CAPTION to.
+ * @data: guint8 caption data
+ * @size: number of 8bit (bytes) in data
+ */
+GstMPEGUserDataMeta *   gst_buffer_add_mpeg_user_data_meta (GstBuffer * buffer,
+                                      GstVideoUserDataIdentifier identifier,
+                                      GstVideoUserDataType type,
+                                      const guint8 * data,
+                                      gsize size);
+
 
 G_END_DECLS
 
